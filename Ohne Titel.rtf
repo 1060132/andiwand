@@ -1,0 +1,123 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2818
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #!/usr/bin/env python3\
+import asyncio\
+from aiohttp import web\
+import serial\
+\
+# UART-Konfiguration: Passen Sie den Port und die Baudrate nach Bedarf an\
+UART_PORT = '/dev/ttyS0'\
+BAUDRATE = 115200\
+\
+try:\
+    ser = serial.Serial(UART_PORT, BAUDRATE, timeout=1)\
+    print(f"UART auf \{UART_PORT\} mit \{BAUDRATE\} Baud ge\'f6ffnet.")\
+except Exception as e:\
+    print("Fehler beim \'d6ffnen des UART-Ports:", e)\
+    exit(1)\
+\
+# Websocket-Handler: Er empf\'e4ngt Befehle und sendet diese \'fcber den UART-Port\
+async def websocket_handler(request):\
+    ws = web.WebSocketResponse()\
+    await ws.prepare(request)\
+    print("Neuer Websocket-Client verbunden.")\
+\
+    async for msg in ws:\
+        if msg.type == web.WSMsgType.TEXT:\
+            command = msg.data.strip()\
+            print(f"Empfangener Befehl: \{command\}")\
+            try:\
+                # Sende den Befehl \'fcber UART (hier als Zeile mit Zeilenumbruch)\
+                ser.write((command + "\\n").encode())\
+                print(f"Befehl '\{command\}' \'fcber UART gesendet.")\
+            except Exception as e:\
+                print("Fehler beim Senden \'fcber UART:", e)\
+            # Optional: Best\'e4tigung an den Client zur\'fccksenden\
+            await ws.send_str(f"Befehl '\{command\}' empfangen und weitergeleitet.")\
+        elif msg.type == web.WSMsgType.ERROR:\
+            print(f"Websocket-Fehler: \{ws.exception()\}")\
+    print("Websocket-Verbindung geschlossen.")\
+    return ws\
+\
+# HTTP-Handler f\'fcr die Startseite, der eine HTML-Seite mit den Steuerelementen liefert\
+async def index(request):\
+    html_content = """\
+<!DOCTYPE html>\
+<html>\
+<head>\
+    <meta charset="UTF-8">\
+    <title>Raspberry Pi Steuerung</title>\
+    <script>\
+        let ws;\
+        function init() \{\
+            ws = new WebSocket("ws://" + location.host + "/ws");\
+            ws.onopen = function() \{\
+                console.log("Websocket verbunden.");\
+            \};\
+            ws.onmessage = function(event) \{\
+                console.log("Antwort vom Server: " + event.data);\
+            \};\
+            ws.onerror = function(event) \{\
+                console.error("Websocket-Fehler:", event);\
+            \};\
+        \}\
+        function sendCommand(cmd) \{\
+            if(ws && ws.readyState === WebSocket.OPEN) \{\
+                ws.send(cmd);\
+            \} else \{\
+                alert("Websocket ist nicht verbunden.");\
+            \}\
+        \}\
+        window.addEventListener("load", init);\
+    </script>\
+    <style>\
+        button \{ margin: 5px; padding: 10px; font-size: 16px; \}\
+        .control \{ margin-bottom: 20px; \}\
+    </style>\
+</head>\
+<body>\
+    <h1>Raspberry Pi Steuerung</h1>\
+    <div class="control">\
+        <button onclick="sendCommand('forward')">Vorw\'e4rts</button>\
+        <button onclick="sendCommand('backward')">R\'fcckw\'e4rts</button>\
+        <button onclick="sendCommand('left')">Links</button>\
+        <button onclick="sendCommand('right')">Rechts</button>\
+    </div>\
+    <div class="control">\
+        <h2>Ventile schalten</h2>\
+        <button onclick="sendCommand('valve1')">Ventil 1</button>\
+        <button onclick="sendCommand('valve2')">Ventil 2</button>\
+        <button onclick="sendCommand('valve3')">Ventil 3</button>\
+        <button onclick="sendCommand('valve4')">Ventil 4</button>\
+        <button onclick="sendCommand('valve5')">Ventil 5</button>\
+        <button onclick="sendCommand('valve6')">Ventil 6</button>\
+        <button onclick="sendCommand('valve7')">Ventil 7</button>\
+        <button onclick="sendCommand('valve8')">Ventil 8</button>\
+        <button onclick="sendCommand('valve9')">Ventil 9</button>\
+        <button onclick="sendCommand('valve10')">Ventil 10</button>\
+        <button onclick="sendCommand('valve11')">Ventil 11</button>\
+        <button onclick="sendCommand('valve12')">Ventil 12</button>\
+    </div>\
+</body>\
+</html>\
+    """\
+    return web.Response(text=html_content, content_type='text/html')\
+\
+# Erstellen der aiohttp-Anwendung und Definieren der Routen\
+app = web.Application()\
+app.add_routes([\
+    web.get('/', index),\
+    web.get('/ws', websocket_handler)\
+])\
+\
+# Starten des Webservers\
+if __name__ == '__main__':\
+    try:\
+        web.run_app(app, host='0.0.0.0', port=8080)\
+    except Exception as e:\
+        print("Fehler beim Starten des Servers:", e)}
